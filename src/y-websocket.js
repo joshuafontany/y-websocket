@@ -192,9 +192,13 @@ export class WebsocketProvider extends Observable {
    */
   constructor (serverUrl, roomname, doc, { connect = true, awareness = new awarenessProtocol.Awareness(doc), params = {}, WebSocketPolyfill = WebSocket, resyncInterval = -1 } = {}) {
     super()
-    // ensure that url is always ends with /
+    // ensure that url is always ends with /, then remove it
     while (serverUrl[serverUrl.length - 1] === '/') {
       serverUrl = serverUrl.slice(0, serverUrl.length - 1)
+    }
+    // ensure that roomname is always starts with /, then remove it
+    while (roomname[0] === '/') {
+      roomname = roomname.slice(1, roomname.length)
     }
     const encodedParams = url.encodeQueryParams(params)
     this.bcChannel = serverUrl + '/' + roomname
