@@ -42,7 +42,7 @@ if (typeof persistenceDir === 'string') {
       ydoc.on('update', update => {
         ldb.storeUpdate(docName, update)
       })
-      ydoc.emit('load',null)
+      ydoc.emit('load',[])
     },
     writeState: async (docName, ydoc) => {}
   }
