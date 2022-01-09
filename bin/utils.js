@@ -191,7 +191,7 @@ const messageListener = (conn, doc, message) => {
         }
         send(doc, conn, encoding.toUint8Array(encoder))
         if (authenticated) {
-          sync(doc, conn)
+          sendSync(doc, conn)
         }
         break
       }
@@ -246,7 +246,7 @@ const send = (doc, conn, m) => {
  * @param {WSSharedDoc} doc
  * @param {any} conn
  */
-const sync = (doc, conn) =>{
+const sendSync = (doc, conn) =>{
   // send sync step 1
   const encoder = encoding.createEncoder()
   encoding.writeVarUint(encoder, messageSync)
