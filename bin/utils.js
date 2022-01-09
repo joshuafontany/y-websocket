@@ -307,6 +307,6 @@ exports.setupWSConnection = (conn, req, { docName = req.url.slice(1).split('?')[
   })
   // If preauthenticated, sync, else wait for the auth handshake
   if(conn.authenticated){
-    sync(doc, conn)
+    sendSync(doc, conn)
   }
 }
