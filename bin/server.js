@@ -19,12 +19,29 @@ const server = http.createServer((request, response) => {
 wss.on('connection', setupWSConnection)
 
 server.on('upgrade', (request, socket, head) => {
+  // You may check/set permissions of the user here. Set as opts.authFunction to enable pre-sync auth.
+  /**
+   * @param {any} y // Y.Doc
+   * @param {string} token // provider.authToken
+   */
+  const authUser = (doc, token) => {
+    // This example sets conn.isReadOnly to false.
+    conn.isReadyOnly = false
+    // You can set conn.authStatus to a denied reason and return false
+    // if (doc.name !== token) {
+    //    conn.authStatus = "Wrong Room!"
+    //    return false
+    // }
+    // The client connection will receive conn.authStatus after the function is called.
+    conn.authStatus = JSON.stringify({anonymous: true, "read_only": false, username: "GUEST"},null,0)
+    return true
+  }
   // You may check auth of request here..
   /**
    * @param {any} ws
    */
   const handleAuth = ws => {
-    wss.emit('connection', ws, request)
+    wss.emit('connection', ws, request, {authFunction: null})
   }
   wss.handleUpgrade(request, socket, head, handleAuth)
 })

@@ -62,6 +62,10 @@ import { WebsocketProvider } from 'y-websocket'
 
 ```js
 wsOpts = {
+  // Set this to `true` if you want the server to trade auth messages before syncing
+  auth: false,
+  // The token to authenticate before syncing
+  authToken: "",
   // Set this to `false` if you want to connect manually using wsProvider.connect()
   connect: true,
   // Specify a query-string that will be url-encoded and attached to the `serverUrl`
@@ -80,6 +84,8 @@ wsOpts = {
   <dd>True if this instance is currently connected to the server.</dd>
   <b><code>wsProvider.wsconnecting: boolean</code></b>
   <dd>True if this instance is currently connecting to the server.</dd>
+  <b><code>wsProvider.shouldAuth: boolean</code></b>
+  <dd>If false, the client will not try to authenticate and will immediately sync (default).</dd>
   <b><code>wsProvider.shouldConnect: boolean</code></b>
   <dd>If false, the client will not try to reconnect.</dd>
   <b><code>wsProvider.bcconnected: boolean</code></b>

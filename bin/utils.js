@@ -11,6 +11,7 @@ const debounce = require('lodash.debounce')
 
 const callbackHandler = require('./callback.js').callbackHandler
 const isCallbackSet = require('./callback.js').isCallbackSet
+const { sync } = require('fs-extra/lib/remove/rimraf')
 
 const CALLBACK_DEBOUNCE_WAIT = parseInt(process.env.CALLBACK_DEBOUNCE_WAIT) || 2000
 const CALLBACK_DEBOUNCE_MAXWAIT = parseInt(process.env.CALLBACK_DEBOUNCE_MAXWAIT) || 10000
@@ -71,7 +72,7 @@ exports.docs = docs
 
 const messageSync = 0
 const messageAwareness = 1
-// const messageAuth = 2
+const messageAuth = 2
 
 /**
  * @param {Uint8Array} update
@@ -179,6 +180,21 @@ const messageListener = (conn, doc, message) => {
         awarenessProtocol.applyAwarenessUpdate(doc.awareness, decoding.readVarUint8Array(decoder), conn)
         break
       }
+      case messageAuth: {
+        encoding.writeVarUint(encoder, messageAuth)
+        const authenticated = authProtocol.verifyAuthMessage(decoder, doc, conn.authFunction)
+        conn.authenticated = authenticated
+        if (authenticated) {
+          authProtocol.writePermissionApproved(encoder, conn.authStatus)
+        } else {
+          authProtocol.writePermissionDenied(encoder, conn.authStatus)
+        }
+        send(doc, conn, encoding.toUint8Array(encoder))
+        if (authenticated) {
+          sync(doc, conn)
+        }
+        break
+      }
     }
   } catch (err) {
     console.error(err)
@@ -226,6 +242,25 @@ const send = (doc, conn, m) => {
   }
 }
 
+/**
+ * @param {WSSharedDoc} doc
+ * @param {any} conn
+ */
+const sync = (doc, conn) =>{
+  // send sync step 1
+  const encoder = encoding.createEncoder()
+  encoding.writeVarUint(encoder, messageSync)
+  syncProtocol.writeSyncStep1(encoder, doc)
+  send(doc, conn, encoding.toUint8Array(encoder))
+  const awarenessStates = doc.awareness.getStates()
+  if (awarenessStates.size > 0) {
+    const encoder = encoding.createEncoder()
+    encoding.writeVarUint(encoder, messageAwareness)
+    encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(doc.awareness, Array.from(awarenessStates.keys())))
+    send(doc, conn, encoding.toUint8Array(encoder))
+  }
+}
+
 const pingTimeout = 30000
 
 /**
@@ -233,7 +268,11 @@ const pingTimeout = 30000
  * @param {any} req
  * @param {any} opts
  */
-exports.setupWSConnection = (conn, req, { docName = req.url.slice(1).split('?')[0], gc = true } = {}) => {
+exports.setupWSConnection = (conn, req, { docName = req.url.slice(1).split('?')[0], gc = true, authFunction = null } = {}) => {
+  conn.authenticated = !authFunction
+  conn.authFunction = authFunction
+  conn.authStatus = null
+  conn.isReadOnly = false
   conn.binaryType = 'arraybuffer'
   // get doc, initialize if it does not exist yet
   const doc = getYDoc(docName, gc)
@@ -266,20 +305,8 @@ exports.setupWSConnection = (conn, req, { docName = req.url.slice(1).split('?')[
   conn.on('pong', () => {
     pongReceived = true
   })
-  // put the following in a variables in a block so the interval handlers don't keep in in
-  // scope
-  {
-    // send sync step 1
-    const encoder = encoding.createEncoder()
-    encoding.writeVarUint(encoder, messageSync)
-    syncProtocol.writeSyncStep1(encoder, doc)
-    send(doc, conn, encoding.toUint8Array(encoder))
-    const awarenessStates = doc.awareness.getStates()
-    if (awarenessStates.size > 0) {
-      const encoder = encoding.createEncoder()
-      encoding.writeVarUint(encoder, messageAwareness)
-      encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(doc.awareness, Array.from(awarenessStates.keys())))
-      send(doc, conn, encoding.toUint8Array(encoder))
-    }
+  // If preauthenticated, sync, else wait for the auth handshake
+  if(conn.authenticated){
+    sync(doc, conn)
   }
 }

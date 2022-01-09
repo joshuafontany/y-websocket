@@ -50,7 +50,7 @@ messageHandlers[messageAwareness] = (encoder, decoder, provider, emitSynced, mes
 }
 
 messageHandlers[messageAuth] = (encoder, decoder, provider, emitSynced, messageType) => {
-  authProtocol.readAuthMessage(decoder, provider.doc, permissionDeniedHandler)
+  authProtocol.readAuthMessage(decoder, provider.doc, permissionDeniedHandler, permissionApprovedHandler)
 }
 
 const reconnectTimeoutBase = 1200
@@ -62,7 +62,43 @@ const messageReconnectTimeout = 30000
  * @param {WebsocketProvider} provider
  * @param {string} reason
  */
-const permissionDeniedHandler = (provider, reason) => console.warn(`Permission denied to access ${provider.url}.\n${reason}`)
+const permissionDeniedHandler = (provider, reason) => {
+  let status = `Permission denied to access ${provider.url}.\n${reason}`
+  console.warn(status)
+  provider.authStatus = status
+  provider.emit('auth', [status])
+}
+
+/**
+ * @param {WebsocketProvider} provider
+ * @param {string} statusString
+ */
+const permissionApprovedHandler = (provider, statusString) => {
+  let status = null
+  try {
+    status = JSON.parse(statusString)
+    provider.isReadOnly = status["read_only"]
+  } catch (err) {
+    status = statusString    
+  }
+  provider.authStatus = status
+  if (provider.wsconnected) {
+    // always send sync step 1 when authed
+    const encoder = encoding.createEncoder()
+    encoding.writeVarUint(encoder, messageSync)
+    syncProtocol.writeSyncStep1(encoder, provider.doc)
+    /** @type {WebSocket} */ (provider.ws).send(encoding.toUint8Array(encoder))
+    // broadcast local awareness state
+    if (provider.awareness.getLocalState() !== null) {
+      const encoderAwarenessState = encoding.createEncoder()
+      encoding.writeVarUint(encoderAwarenessState, messageAwareness)
+      encoding.writeVarUint8Array(encoderAwarenessState, awarenessProtocol.encodeAwarenessUpdate(provider.awareness, [provider.doc.clientID]));
+      /** @type {WebSocket} */ (provider.ws).send(encoding.toUint8Array(encoderAwarenessState))
+    }
+  }
+
+  provider.emit('auth', [status])
+}
 
 /**
  * @param {WebsocketProvider} provider
@@ -130,17 +166,25 @@ const setupWS = provider => {
       provider.emit('status', [{
         status: 'connected'
       }])
-      // always send sync step 1 when connected
-      const encoder = encoding.createEncoder()
-      encoding.writeVarUint(encoder, messageSync)
-      syncProtocol.writeSyncStep1(encoder, provider.doc)
-      websocket.send(encoding.toUint8Array(encoder))
-      // broadcast local awareness state
-      if (provider.awareness.getLocalState() !== null) {
-        const encoderAwarenessState = encoding.createEncoder()
-        encoding.writeVarUint(encoderAwarenessState, messageAwareness)
-        encoding.writeVarUint8Array(encoderAwarenessState, awarenessProtocol.encodeAwarenessUpdate(provider.awareness, [provider.doc.clientID]))
-        websocket.send(encoding.toUint8Array(encoderAwarenessState))
+      if (provider.shouldAuth) {
+        // ask for auth permissions
+        const encoder = encoding.createEncoder()
+        encoding.writeVarUint(encoder, messageAuth)
+        authProtocol.writePermissionRequested(encoder, provider.authToken)
+        websocket.send(encoding.toUint8Array(encoder))
+      } else {
+        // always send sync step 1 when connected
+        const encoder = encoding.createEncoder()
+        encoding.writeVarUint(encoder, messageSync)
+        syncProtocol.writeSyncStep1(encoder, provider.doc)
+        websocket.send(encoding.toUint8Array(encoder))
+        // broadcast local awareness state
+        if (provider.awareness.getLocalState() !== null) {
+          const encoderAwarenessState = encoding.createEncoder()
+          encoding.writeVarUint(encoderAwarenessState, messageAwareness)
+          encoding.writeVarUint8Array(encoderAwarenessState, awarenessProtocol.encodeAwarenessUpdate(provider.awareness, [provider.doc.clientID]))
+          websocket.send(encoding.toUint8Array(encoderAwarenessState))
+        }
       }
     }
 
@@ -184,13 +228,15 @@ export class WebsocketProvider extends Observable {
    * @param {string} roomname
    * @param {Y.Doc} doc
    * @param {object} [opts]
+   * @param {boolean} [opts.auth]
+   * @param {string} [opts.authToken]
    * @param {boolean} [opts.connect]
    * @param {awarenessProtocol.Awareness} [opts.awareness]
    * @param {Object<string,string>} [opts.params]
    * @param {typeof WebSocket} [opts.WebSocketPolyfill] Optionall provide a WebSocket polyfill
    * @param {number} [opts.resyncInterval] Request server state every `resyncInterval` milliseconds
    */
-  constructor (serverUrl, roomname, doc, { connect = true, awareness = new awarenessProtocol.Awareness(doc), params = {}, WebSocketPolyfill = WebSocket, resyncInterval = -1 } = {}) {
+  constructor (serverUrl, roomname, doc, { auth = false, authToken = "", connect = true, awareness = new awarenessProtocol.Awareness(doc), params = {}, WebSocketPolyfill = WebSocket, resyncInterval = -1 } = {}) {
     super()
     // ensure that url is always ends with /, then remove it
     while (serverUrl[serverUrl.length - 1] === '/') {
@@ -198,7 +244,7 @@ export class WebsocketProvider extends Observable {
     }
     // ensure that roomname is always starts with /, then remove it
     while (roomname[0] === '/') {
-      roomname = roomname.slice(1, roomname.length)
+      roomname = roomname.slice(1)
     }
     const encodedParams = url.encodeQueryParams(params)
     this.bcChannel = serverUrl + '/' + roomname
@@ -222,6 +268,14 @@ export class WebsocketProvider extends Observable {
      */
     this.ws = null
     this.wsLastMessageReceived = 0
+    /**
+     * Whether to connect to other peers or not
+     * @type {boolean}
+     */
+    this.shouldAuth = auth
+    this.authStatus = null
+    this.authToken = authToken
+    this.isReadOnly = false
     /**
      * Whether to connect to other peers or not
      * @type {boolean}
