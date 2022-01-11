@@ -24,6 +24,9 @@ server.on('upgrade', (request, socket, head) => {
    * @param {any} ws
    */
   const handleAuth = ws => {
+    // ws == conn. If athorize:true is passed in the connection.opts, then
+    // the client connection will receive conn.authStatus after the authorize function is called.
+    ws.authStatus = JSON.stringify({anonymous: true, "read_only": false, username: "GUEST"},null,0)
     wss.emit('connection', ws, request, {authorize: false})
   }
   wss.handleUpgrade(request, socket, head, handleAuth)

@@ -69,7 +69,7 @@ exports.getPersistence = () => persistence
  * @param {any} y // Y.Doc / WSSharedDoc
  * @param {string} token // provider.authToken
  */
-let authorize = (doc, token) => {
+let authorize = (doc, conn, token) => {
   // This example sets conn.isReadOnly to false.
   conn.isReadyOnly = false
   // You can set conn.authStatus to a denied reason and return false
@@ -77,8 +77,6 @@ let authorize = (doc, token) => {
   //    conn.authStatus = "403 Forbidden" //Auto-terminates the websocket provider
   //    return false
   // }
-  // The client connection will receive conn.authStatus after the function is called.
-  conn.authStatus = JSON.stringify({anonymous: true, "read_only": false, username: "GUEST"},null,0)
   return true
 }
 
@@ -214,7 +212,7 @@ const messageListener = (conn, doc, message) => {
       }
       case messageAuth: {
         encoding.writeVarUint(encoder, messageAuth)
-        const authorized = authProtocol.verifyAuthMessage(decoder, doc, authorize)
+        const authorized = authProtocol.verifyAuthMessage(decoder, doc, conn, authorize)
         conn.authorized = authorized
         if (authorized) {
           authProtocol.writePermissionApproved(encoder, conn.authStatus)
