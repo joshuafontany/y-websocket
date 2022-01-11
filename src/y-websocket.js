@@ -67,6 +67,10 @@ const permissionDeniedHandler = (provider, reason) => {
   console.warn(status)
   provider.authStatus = status
   provider.emit('auth', [status])
+  if(reason == "403 Forbidden") {
+    console.warn(`\tThe current user does not have permission to access ${provider.url}.`)
+    provider.destroy()
+  }
 }
 
 /**
@@ -74,15 +78,14 @@ const permissionDeniedHandler = (provider, reason) => {
  * @param {string} statusString
  */
 const permissionApprovedHandler = (provider, statusString) => {
-  let status = null
   try {
-    status = JSON.parse(statusString)
-    provider.isReadOnly = status["read_only"]
+    const status = JSON.parse(statusString)
+    provider.authStatus = status
   } catch (err) {
-    status = statusString    
+    const status = statusString
+    provider.authStatus = status   
   }
-  provider.authStatus = status
-  if (provider.wsconnected) {
+  if (provider.wsconnected && !provider.synced) {
     // always send sync step 1 when authed
     const encoder = encoding.createEncoder()
     encoding.writeVarUint(encoder, messageSync)
@@ -97,7 +100,7 @@ const permissionApprovedHandler = (provider, statusString) => {
     }
   }
 
-  provider.emit('auth', [status])
+  provider.emit('authorize', [provider.authStatus])
 }
 
 /**
@@ -275,7 +278,6 @@ export class WebsocketProvider extends Observable {
     this.shouldAuth = auth
     this.authStatus = null
     this.authToken = authToken
-    this.isReadOnly = false
     /**
      * Whether to connect to other peers or not
      * @type {boolean}

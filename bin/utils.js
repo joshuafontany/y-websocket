@@ -63,6 +63,38 @@ exports.setPersistence = persistence_ => {
   */
 exports.getPersistence = () => persistence
 
+// You may check/set permissions of the user here. Set the conn.isReadOnly and conn.authStatus then return a boolean.
+// Set opts.authorize: true when emitting the connection to enable pre-sync auth.
+/**
+ * @param {any} y // Y.Doc / WSSharedDoc
+ * @param {string} token // provider.authToken
+ */
+let authorize = (doc, token) => {
+  // This example sets conn.isReadOnly to false.
+  conn.isReadyOnly = false
+  // You can set conn.authStatus to a denied reason and return false
+  // if (doc.name !== token) {
+  //    conn.authStatus = "403 Forbidden" //Auto-terminates the websocket provider
+  //    return false
+  // }
+  // The client connection will receive conn.authStatus after the function is called.
+  conn.authStatus = JSON.stringify({anonymous: true, "read_only": false, username: "GUEST"},null,0)
+  return true
+}
+
+/**
+ * @param {function(WSSharedDoc,string):boolean} authorize_
+ */
+exports.setAuthorize = authorize_ => {
+  authorize = authorize_
+}
+
+/**
+ * @return {function(WSSharedDoc,string):boolean} used persistence layer
+  */
+exports.getAuthorize = () => authorize
+
+
 /**
  * @type {Map<string,WSSharedDoc>}
  */
@@ -182,16 +214,15 @@ const messageListener = (conn, doc, message) => {
       }
       case messageAuth: {
         encoding.writeVarUint(encoder, messageAuth)
-        const authenticated = authProtocol.verifyAuthMessage(decoder, doc, conn.authFunction)
-        conn.authenticated = authenticated
-        if (authenticated) {
+        const authorized = authProtocol.verifyAuthMessage(decoder, doc, authorize)
+        conn.authorized = authorized
+        if (authorized) {
           authProtocol.writePermissionApproved(encoder, conn.authStatus)
+          send(doc, conn, encoding.toUint8Array(encoder))
+          sendSync(doc, conn)
         } else {
           authProtocol.writePermissionDenied(encoder, conn.authStatus)
-        }
-        send(doc, conn, encoding.toUint8Array(encoder))
-        if (authenticated) {
-          sendSync(doc, conn)
+          conn.destroy()
         }
         break
       }
@@ -268,9 +299,8 @@ const pingTimeout = 30000
  * @param {any} req
  * @param {any} opts
  */
-exports.setupWSConnection = (conn, req, { docName = req.url.slice(1).split('?')[0], gc = true, authFunction = null } = {}) => {
-  conn.authenticated = !authFunction
-  conn.authFunction = authFunction
+exports.setupWSConnection = (conn, req, { docName = req.url.slice(1).split('?')[0], gc = true, authorize = false } = {}) => {
+  conn.authorized = !authorize
   conn.authStatus = null
   conn.isReadOnly = false
   conn.binaryType = 'arraybuffer'
@@ -305,8 +335,8 @@ exports.setupWSConnection = (conn, req, { docName = req.url.slice(1).split('?')[
   conn.on('pong', () => {
     pongReceived = true
   })
-  // If preauthenticated, sync, else wait for the auth handshake
-  if(conn.authenticated){
+  // If pre-authorized then sync, else wait for the auth handshake
+  if(conn.authorized){
     sendSync(doc, conn)
   }
 }
