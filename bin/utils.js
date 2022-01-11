@@ -297,9 +297,9 @@ const pingTimeout = 30000
  * @param {any} req
  * @param {any} opts
  */
-exports.setupWSConnection = (conn, req, { docName = req.url.slice(1).split('?')[0], gc = true, authorize = false } = {}) => {
+exports.setupWSConnection = (conn, req, { docName = req.url.slice(1).split('?')[0], gc = true, authorize = false, authStatus = "" } = {}) => {
   conn.authorized = !authorize
-  conn.authStatus = null
+  conn.authStatus = authStatus
   conn.isReadOnly = false
   conn.binaryType = 'arraybuffer'
   // get doc, initialize if it does not exist yet
