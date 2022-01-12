@@ -25,9 +25,9 @@ server.on('upgrade', (request, socket, head) => {
    */
   const handleAuth = ws => {
     // ws == conn. If athorize:true is passed in the connection.opts, then
-    // the client connection will receive conn.authStatus after the authorize function is called.
-    let status = JSON.stringify({anonymous: true, "read_only": false, username: "GUEST"},null,0)
-    wss.emit('connection', ws, request, {authorize: false, authStatus = status})
+    // the client connection will receive conn.authStatus before syncing.
+    const status = JSON.stringify({anonymous: true, "read_only": false, username: "GUEST"},null,0)
+    wss.emit('connection', ws, request, {authorize: false, authStatus: status})
   }
   wss.handleUpgrade(request, socket, head, handleAuth)
 })
