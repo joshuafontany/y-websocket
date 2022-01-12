@@ -66,9 +66,8 @@ const permissionDeniedHandler = (provider, reason) => {
   let status = `Permission denied to access ${provider.url}.\n${reason}`
   console.warn(status)
   provider.authStatus = status
-  provider.emit('auth', [status])
+  provider.emit('status', [{status: "denied"}])
   if(reason == "403 Forbidden") {
-    console.warn(`\tThe current user does not have permission to access ${provider.url}.`)
     provider.destroy()
   }
 }
@@ -99,8 +98,7 @@ const permissionApprovedHandler = (provider, statusString) => {
       /** @type {WebSocket} */ (provider.ws).send(encoding.toUint8Array(encoderAwarenessState))
     }
   }
-
-  provider.emit('authorize', [provider.authStatus])
+  provider.emit('status', [{status: "approved"}])
 }
 
 /**
@@ -231,7 +229,7 @@ export class WebsocketProvider extends Observable {
    * @param {string} roomname
    * @param {Y.Doc} doc
    * @param {object} [opts]
-   * @param {boolean} [opts.auth]
+   * @param {boolean} [opts.authorize]
    * @param {string} [opts.authToken]
    * @param {boolean} [opts.connect]
    * @param {awarenessProtocol.Awareness} [opts.awareness]
@@ -239,7 +237,7 @@ export class WebsocketProvider extends Observable {
    * @param {typeof WebSocket} [opts.WebSocketPolyfill] Optionall provide a WebSocket polyfill
    * @param {number} [opts.resyncInterval] Request server state every `resyncInterval` milliseconds
    */
-  constructor (serverUrl, roomname, doc, { auth = false, authToken = "", connect = true, awareness = new awarenessProtocol.Awareness(doc), params = {}, WebSocketPolyfill = WebSocket, resyncInterval = -1 } = {}) {
+  constructor (serverUrl, roomname, doc, { authorize = false, authToken = "", connect = true, awareness = new awarenessProtocol.Awareness(doc), params = {}, WebSocketPolyfill = WebSocket, resyncInterval = -1 } = {}) {
     super()
     // ensure that url is always ends with /, then remove it
     while (serverUrl[serverUrl.length - 1] === '/') {
@@ -275,7 +273,7 @@ export class WebsocketProvider extends Observable {
      * Whether to connect to other peers or not
      * @type {boolean}
      */
-    this.shouldAuth = auth
+    this.shouldAuth = authorize
     this.authStatus = null
     this.authToken = authToken
     /**
