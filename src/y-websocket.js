@@ -84,18 +84,18 @@ const permissionApprovedHandler = (provider, statusString) => {
     const status = statusString
     provider.authStatus = status   
   }
-  if (provider.wsconnected && !provider.synced) {
+  if (provider.ws && provider.wsconnected && !provider.synced) {
     // always send sync step 1 when authed
     const encoder = encoding.createEncoder()
     encoding.writeVarUint(encoder, messageSync)
     syncProtocol.writeSyncStep1(encoder, provider.doc)
-    /** @type {WebSocket} */ (provider.ws).send(encoding.toUint8Array(encoder))
+    provider.ws.send(encoding.toUint8Array(encoder))
     // broadcast local awareness state
     if (provider.awareness.getLocalState() !== null) {
       const encoderAwarenessState = encoding.createEncoder()
       encoding.writeVarUint(encoderAwarenessState, messageAwareness)
       encoding.writeVarUint8Array(encoderAwarenessState, awarenessProtocol.encodeAwarenessUpdate(provider.awareness, [provider.doc.clientID]));
-      /** @type {WebSocket} */ (provider.ws).send(encoding.toUint8Array(encoderAwarenessState))
+      provider.ws.send(encoding.toUint8Array(encoderAwarenessState))
     }
   }
   provider.emit('status', [{status: "approved"}])
