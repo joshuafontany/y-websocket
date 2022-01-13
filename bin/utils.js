@@ -71,14 +71,14 @@ exports.getPersistence = () => persistence
  * @param {string} token // provider.authToken
  */
 let authorize = (doc, conn, token) => {
-  // This example sets conn.isReadOnly to false.
+  // This example sets conn.isReadOnly to false and conn.authorized to true
   conn.isReadyOnly = false
-  // You can set conn.authStatus to a denied reason and return false
+  conn.authorized = true
+  // You can set conn.authStatus to a denied reason and conn.authorized to false
   // if (doc.name !== token) {
   //    conn.authStatus = "403 Forbidden" //Auto-terminates the websocket provider
-  //    return false
+  //    conn.authorized = false
   // }
-  return true
 }
 
 /**
@@ -213,9 +213,8 @@ const messageListener = (conn, doc, message) => {
       }
       case messageAuth: {
         encoding.writeVarUint(encoder, messageAuth)
-        const authorized = authProtocol.verifyAuthMessage(decoder, doc, conn, authorize)
-        conn.authorized = authorized
-        if (authorized) {
+        authProtocol.verifyAuthMessage(decoder, doc, conn, authorize)
+        if (conn.authorized) {
           authProtocol.writePermissionApproved(encoder, conn.authStatus)
           send(doc, conn, encoding.toUint8Array(encoder))
           sendSync(doc, conn)
