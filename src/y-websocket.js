@@ -50,7 +50,7 @@ messageHandlers[messageAwareness] = (encoder, decoder, provider, emitSynced, mes
 }
 
 messageHandlers[messageAuth] = (encoder, decoder, provider, emitSynced, messageType) => {
-  authProtocol.readAuthMessage(decoder, provider.doc, permissionDeniedHandler, permissionApprovedHandler)
+  authProtocol.readAuthMessage(decoder, provider, permissionDeniedHandler, permissionApprovedHandler)
 }
 
 const reconnectTimeoutBase = 1200
