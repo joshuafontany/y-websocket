@@ -221,7 +221,7 @@ const messageListener = (conn, doc, message) => {
           sendSync(doc, conn)
         } else {
           authProtocol.writePermissionDenied(encoder, conn.authStatus)
-          conn.destroy()
+          conn.terminate()
         }
         break
       }
