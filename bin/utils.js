@@ -1,5 +1,6 @@
 const Y = require('yjs')
 const syncProtocol = require('y-protocols/dist/sync.cjs')
+const authProtocol = require('y-protocols/dist/auth.cjs')
 const awarenessProtocol = require('y-protocols/dist/awareness.cjs')
 
 const encoding = require('lib0/dist/encoding.cjs')
